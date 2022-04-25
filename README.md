@@ -31,15 +31,32 @@ Note: Running MinIO in standalone mode is intended for early development and eva
           quay.io/minio/minio server /data --console-address ":9001"
     ```
 
+    The command creates a new local directory ~/minio/data in your user home directory. It then starts the MinIO container with the -v argument to map the local path (~/minio/data) to the specified virtual container directory (/data). When MinIO writes data to /data, that data is actually written to the local path ~/minio/data where it can persist between container restarts.
+
 2. You can use http://127.0.0.1:9001 to access the MinIO console. Note that the api port in this example is 9000. 
 
     ![Alt text](docs/minio-console.png?raw=true "MinIO Console")
 
     Open the MinIO Console and create a bucket called testbucket. Now upload the username.csv file to this bucket.
 
-3. Install the pyarrow modules through pip.  
+3. Install the pyarrow python module through pip. This could be done using below command:
+    
+    ```bash
+    pip3 install pyarrow
+    ```
 
-4. The following code is first read by the username.csv file loaded in the bucket and then made into a parquet and loaded in the same bucket:
+4. The following code first reads the username.csv file loaded in the bucket. The result is a table with the following structure:
+
+    Field Name | Data Type
+    --- | ---
+    Username | string 
+    Identifier | int64
+    First name | string 
+    Last name  | string 
+
+    In the next step, a query is written on this table that filters on the Identifier field. The result is printed to the console.
+
+    Now the desired table is written as parquet in the same bucket.
 
     ```python
     # create the output path in minio
@@ -56,8 +73,16 @@ Note: Running MinIO in standalone mode is intended for early development and eva
     import pyarrow.parquet as pq
     pq_output_file = f"{BUCKET_NAME}/{FILE_NAME}.parquet"
     with s3.open_input_file(f"{BUCKET_NAME}/{FILE_NAME}.csv") as file:
-    table = csv.read_csv(file)
-    
-    # write the table to minio
-    pq.write_to_dataset(table=table, root_path=pq_output_file, filesystem=s3) 
+        table = csv.read_csv(file)
+        
+        # example query from table
+        import pyarrow as pa
+        import pyarrow.compute as pc
+        value_index = table.column('Identifier')
+        row_mask = pc.equal(value_index, pa.scalar(2070, value_index.type))
+        selected_table = table.filter(row_mask)
+        print(selected_table)
+        
+        # write the table to minio as parquet file
+        pq.write_to_dataset(table=table, root_path=pq_output_file, filesystem=s3) 
     ```

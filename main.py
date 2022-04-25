@@ -14,5 +14,13 @@ pq_output_file = f"{BUCKET_NAME}/{FILE_NAME}.parquet"
 with s3.open_input_file(f"{BUCKET_NAME}/{FILE_NAME}.csv") as file:
   table = csv.read_csv(file)
   
-  # write the table to minio
+  # example query from table
+  import pyarrow as pa
+  import pyarrow.compute as pc
+  value_index = table.column('Identifier')
+  row_mask = pc.equal(value_index, pa.scalar(2070, value_index.type))
+  selected_table = table.filter(row_mask)
+  print(selected_table)
+  
+  # write the table to minio as parquet file
   pq.write_to_dataset(table=table, root_path=pq_output_file, filesystem=s3) 
